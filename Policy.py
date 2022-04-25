@@ -155,7 +155,6 @@ class ActorCritic():
         #n-step target and output calculation
         id = torch.ones(rewards.shape[0])
         id[-self.n:] = 0
-        #why does it work better without.flatten()????????
         n_step_target = torch.Tensor(n_step_rewards) + id*self.critic(states.roll(-self.n)).flatten()
         V_expected = self.critic(states).flatten()
 
