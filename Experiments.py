@@ -223,10 +223,12 @@ def main():
     parser.add_argument('-l', help='Hidden layers (REINFORCE)', dest = 'layers', required=False)
     parser.add_argument('-la', help='Hidden layers actor (AC)', dest = 'layers_actor', required=False)
     parser.add_argument('-lc', help='Hidden layers critic (AC)', dest = 'layers_critic', required=False)
+    parser.add_argument('-tune', help='Tune parameters, where \"tune\" is the amount of dependent parameters to tune. Put 0 for no tuning', dest = 'tune', required = False)
+    parser.add_argument('-reps', help='The amount of repetitions to average results over', dest = 'reps', required = False)
     args = parser.parse_args()
     kwargs = dict(total_episodes=args.episodes,learning_rate=args.learning_rate,future_discount=args.discount,estimation_depth=args.estimation,
     gradient_method=args.gradient,hidden_shape=args.hidden,hidden_shape_actor=args.hidden_actor,hidden_shape_critic=args.hidden_critic,
-    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic)
+    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=args.reps)
     
     run_experiments(args.method, **{k: v for k, v in kwargs.items() if v is not None})
 
