@@ -35,7 +35,7 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
     scores = []
     env = gym.make("CartPole-v1")
     agent = REINFORCE(env.observation_space.shape[0], env.action_space.n, learning_rate, future_reward_discount_factor, hidden_shape)
-
+    learned_at = total_episodes
     for i in range(total_episodes):
         #reset the environment
         state = env.reset()
@@ -70,12 +70,13 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
         if np.mean(scores[-100:]) >= 475: 
             mask = np.full(total_episodes - (i + 1),500)
             scores = np.concatenate((scores,mask))
+            learned_at = i
             print("Solved!")
             break
 
     if np.mean(scores[-100:]) < 475: 
         print("Not Solved...")
-    return scores
+    return scores, learned_at
 
     
 
@@ -101,14 +102,14 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
     scores = []
     env = gym.make("CartPole-v1")
     agent = ActorCritic(env.observation_space.shape[0], env.action_space.n, estimation_depth, gradient_method, learning_rate, hidden_shape_actor, hidden_shape_critic)
-
+    learned_at = total_episodes
     for i in range(total_episodes):
         #reset the environment
         state = env.reset()
         rewards = []
         log_probs = []
         states = []
-
+        
         #Cartpole-v1 has a maximum episode length of 500
         for t in range(500):
             #env.render()
@@ -138,11 +139,12 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
         if np.mean(scores[-100:]) >= 475: 
             mask = np.full(total_episodes - (i + 1),500)
             scores = np.concatenate((scores,mask))
+            learned_at = i
             print("Solved!")
             break
     if np.mean(scores[-100:]) < 475: 
         print("Not Solved...")
-    return scores
+    return scores, learned_at
 
     
 
