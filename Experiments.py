@@ -8,6 +8,8 @@ import random
 import matplotlib.pyplot as plt
 import time
 import argparse
+import pickle
+
 
 
 # %% [markdown]
@@ -153,12 +155,57 @@ def plot_results(total_episodes, score):
     plt.show()
 
 # %%
-def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = 32, hidden_shape_actor = 16, hidden_shape_critic = 16, hidden_layers = 1, hidden_layers_actor = 1, hidden_layers_critic = 1):
-    if method == "AC":
-        score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)])
-    if method == "REINFORCE":
-        score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)])
-    plot_results(total_episodes, score)
+
+def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = 32, hidden_shape_actor = 16, hidden_shape_critic = 16, hidden_layers = 1, hidden_layers_actor = 1, hidden_layers_critic = 1, tune = 0, repetitions = 5):
+    if tune > 0:
+        results_dict = dict()
+        lr = [.5, 1e-1, 1e-2, 1e-3]
+        # First stochastically tune network architecture
+        if method == "AC":
+            with open('networks_params_ac.pickle', 'rb') as handle:
+                results_dict = pickle.load(handle)
+        if method == "REINFORCE":
+            with open('networks_params_reinforce.pickle', 'rb') as handle:
+                results_dict = pickle.load(handle)
+        prev_len = len(results_dict)
+        for _ in range(tune):
+            if method == "AC":
+                ha = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
+                hc = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
+                key = {'layers_actor' : len(ha), 'layers_critic' : len(hc), 'nodes_actor' : ha, 'nodes_critic' : hc, 'lr': random.choice(lr)}
+                while results_dict.has_key(key):
+                    ha = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
+                    hc = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
+                    key = {'layers_actor' : len(ha), 'layers_critic' : len(hc), 'nodes_actor' : ha, 'nodes_critic' : hc, 'lr' : random.choice(lr)}
+                results = []
+                for _ in range(repetitions):
+                    results = AC(total_episodes, estimation_depth, key['lr'], gradient_method, ha, hc)
+                results_dict[key] = sum(results)/len(results)
+            if method == "REINFORCE":
+                hl = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
+                key = {'layers' : len(hl), 'nodes' : hl, 'lr': random.choice(lr)}
+                while results_dict.has_key(key):
+                    hl = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
+                    key = {'layers' : len(hl), 'nodes' : hl, 'lr': random.choice(lr)}
+                results = []
+                for _ in range(repetitions):
+                    results.append(Cartpole(total_episodes, key['lr'], future_discount, hl)[1])
+                results_dict[key] = sum(results)/len(results)
+            # If exhausted, stop
+            if prev_len >= len(results_dict):
+                break
+        if method == "AC":
+            with open('network_params_ac.pickle', 'wb') as handle:
+                pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        if method == "REINFORCE":
+            with open('network_params_reinforce.pickle', 'wb') as handle:
+                pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    else:        
+        if method == "AC":
+            score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)])
+        if method == "REINFORCE":
+            score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)])
+        plot_results(total_episodes, score)
 
 # %%
 #run_experiments("AC")
