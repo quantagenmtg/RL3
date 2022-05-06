@@ -175,16 +175,16 @@ def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_
         lr = [.5, 1e-1, 1e-2, 1e-3]
         # First stochastically tune network architecture
         if method == "AC":
-            if not exists('networks_params_ac.pickle'):
-                Path('networks_params_ac.pickle').touch()
+            if not exists('network_params_ac.pickle'):
+                Path('network_params_ac.pickle').touch()
             else:
-                with open('networks_params_ac.pickle', 'rb+') as handle:
+                with open('network_params_ac.pickle', 'rb+') as handle:
                     results_dict = pickle.load(handle)
         if method == "REINFORCE":
-            if not exists('networks_params_reinforce.pickle'):
-                Path('networks_params_reinforce.pickle').touch()
+            if not exists('network_params_reinforce.pickle'):
+                Path('network_params_reinforce.pickle').touch()
             else:
-                with open('networks_params_reinforce.pickle', 'rb+') as handle:
+                with open('network_params_reinforce.pickle', 'rb+') as handle:
                     results_dict = pickle.load(handle)
         prev_len = len(results_dict)
         for i in tqdm(range(int(tune))):
@@ -206,7 +206,6 @@ def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_
                     result = AC(total_episodes, estimation_depth, lrate, gradient_method, ha, hc, silent)
                     results1.append(sum(result[0])/len(result[0]))
                     results2.append(result[1])
-                print(results1, results2)
                 results_dict[key] = (sum(results1)/len(results1),sum(results2)/len(results2))
             if method == "REINFORCE":
                 hl = [int(np.random.randint(1, 8, 1))*16 for _ in range(np.random.randint(1, 5))]
@@ -224,17 +223,16 @@ def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_
                     result = Cartpole(total_episodes, lrate, future_discount, hl, silent)
                     results1.append(sum(result[0])/len(result[0]))
                     results2.append(result[1])
-                print(results1, results2)
                 results_dict[key] = (sum(results1)/len(results1),sum(results2)/len(results2))
             # If exhausted, stop
             if prev_len >= len(results_dict):
                 break
-        if method == "AC":
-            with open('network_params_ac.pickle', 'wb') as handle:
-                pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        if method == "REINFORCE":
-            with open('network_params_reinforce.pickle', 'wb') as handle:
-                pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            if method == "AC":
+                with open('network_params_ac.pickle', 'wb') as handle:
+                    pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            if method == "REINFORCE":
+                with open('network_params_reinforce.pickle', 'wb') as handle:
+                    pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:        
         if method == "AC":
             score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)])
