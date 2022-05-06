@@ -10,14 +10,16 @@ import time
 import argparse
 import pickle
 
-
+from os.path import exists
+from pathlib import Path
+from tqdm import tqdm
 
 # %% [markdown]
 # # REINFORCE
 # We define a function to run REINFORCE algorithm on.
 
 # %%
-def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidden_shape):
+def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidden_shape, silent=True):
     """
     Tries to solve Cartpole-v1 usinf the REINFORCE algorithm. Right now it only applies a Monte-Carlo REINFORCE
 
@@ -56,7 +58,8 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
 
             #The score is how long the cart stayed upright, this can be a maximum of 500
             if done or t==499:
-                print(f"Episode {i}: Score {t+1}/500")
+                if not silent:
+                    print(f"Episode {i}: Score {t+1}/500")
                 break
         
         rewards = torch.tensor(rewards)
@@ -71,11 +74,13 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
             mask = np.full(total_episodes - (i + 1),500)
             scores = np.concatenate((scores,mask))
             learned_at = i
-            print("Solved!")
+            if not silent:
+                print("Solved!")
             break
 
     if np.mean(scores[-100:]) < 475: 
-        print("Not Solved...")
+        if not silent:
+            print("Not Solved...")
     return scores, learned_at
 
     
@@ -84,7 +89,7 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
 # # Actor-Critic
 
 # %%
-def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic):
+def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent = True):
     """
     Tries to solve Cartpole-v1 usinf the REINFORCE algorithm. Right now it only applies a Monte-Carlo REINFORCE
 
@@ -125,7 +130,8 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
 
             #The score is how long the cart stayed upright, this can be a maximum of 500
             if done or t==499:
-                print(f"Episode {i}: Score {t+1}/500")
+                if not silent:
+                    print(f"Episode {i}: Score {t+1}/500")
                 break
 
         states = torch.Tensor(np.array(states))
@@ -140,10 +146,12 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
             mask = np.full(total_episodes - (i + 1),500)
             scores = np.concatenate((scores,mask))
             learned_at = i
-            print("Solved!")
+            if not silent:
+                print("Solved!")
             break
-    if np.mean(scores[-100:]) < 475: 
-        print("Not Solved...")
+    if np.mean(scores[-100:]) < 475:
+        if not silent: 
+            print("Not Solved...")
     return scores, learned_at
 
     
@@ -157,42 +165,67 @@ def plot_results(total_episodes, score):
     plt.show()
 
 # %%
-
-def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = 32, hidden_shape_actor = 16, hidden_shape_critic = 16, hidden_layers = 1, hidden_layers_actor = 1, hidden_layers_critic = 1, tune = 0, repetitions = 5):
-    if tune > 0:
+def retrieve_dict(key, frozen_dict):
+    for key, value in frozen_dict.items():
+        print(key)
+        exit(0)
+def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = 32, hidden_shape_actor = 16, hidden_shape_critic = 16, hidden_layers = 1, hidden_layers_actor = 1, hidden_layers_critic = 1, tune = 0, repetitions = 5, silent=True):
+    if int(tune) > 0:
         results_dict = dict()
         lr = [.5, 1e-1, 1e-2, 1e-3]
         # First stochastically tune network architecture
         if method == "AC":
-            with open('networks_params_ac.pickle', 'rb') as handle:
-                results_dict = pickle.load(handle)
+            if not exists('networks_params_ac.pickle'):
+                Path('networks_params_ac.pickle').touch()
+            else:
+                with open('networks_params_ac.pickle', 'rb+') as handle:
+                    results_dict = pickle.load(handle)
         if method == "REINFORCE":
-            with open('networks_params_reinforce.pickle', 'rb') as handle:
-                results_dict = pickle.load(handle)
+            if not exists('networks_params_reinforce.pickle'):
+                Path('networks_params_reinforce.pickle').touch()
+            else:
+                with open('networks_params_reinforce.pickle', 'rb+') as handle:
+                    results_dict = pickle.load(handle)
         prev_len = len(results_dict)
-        for _ in range(tune):
+        for i in tqdm(range(int(tune))):
             if method == "AC":
-                ha = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
-                hc = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
-                key = {'layers_actor' : len(ha), 'layers_critic' : len(hc), 'nodes_actor' : ha, 'nodes_critic' : hc, 'lr': random.choice(lr)}
-                while results_dict.has_key(key):
-                    ha = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
-                    hc = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
-                    key = {'layers_actor' : len(ha), 'layers_critic' : len(hc), 'nodes_actor' : ha, 'nodes_critic' : hc, 'lr' : random.choice(lr)}
-                results = []
-                for _ in range(repetitions):
-                    results = AC(total_episodes, estimation_depth, key['lr'], gradient_method, ha, hc)
-                results_dict[key] = sum(results)/len(results)
+                ha = [int(np.random.randint(1, 8, 1))*16 for _ in range(np.random.randint(1, 5))]
+                hc = [int(np.random.randint(1, 8, 1))*16 for _ in range(np.random.randint(1, 5))]
+                lrate = random.choice(lr)
+                dummy_key = {'layers_actor' : len(ha), 'layers_critic' : len(hc), 'nodes_actor' : tuple(ha), 'nodes_critic' : tuple(hc), 'lr': lrate}
+                key = frozenset(dummy_key.items())
+                while key in results_dict:#results_dict.has_key(key):
+                    ha = [np.random.randint(1, 8, 1)*16 for _ in range(np.random.randint(1, 5))]
+                    hc = [np.random.randint(1, 8, 1)*16 for _ in range(np.random.randint(1, 5))]
+                    lrate = random.choice(lr)
+                    dummy_key = {'layers_actor' : len(ha), 'layers_critic' : len(hc), 'nodes_actor' : tuple(ha), 'nodes_critic' : tuple(hc), 'lr' : lrate}
+                    key = frozenset(dummy_key.items())
+                results1 = []
+                results2 = []
+                for _ in range(int(repetitions)):
+                    result = AC(total_episodes, estimation_depth, lrate, gradient_method, ha, hc, silent)
+                    results1.append(sum(result[0])/len(result[0]))
+                    results2.append(result[1])
+                print(results1, results2)
+                results_dict[key] = (sum(results1)/len(results1),sum(results2)/len(results2))
             if method == "REINFORCE":
-                hl = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
-                key = {'layers' : len(hl), 'nodes' : hl, 'lr': random.choice(lr)}
-                while results_dict.has_key(key):
+                hl = [int(np.random.randint(1, 8, 1))*16 for _ in range(np.random.randint(1, 5))]
+                lrate = random.choice(lr)
+                dummy_key = {'layers' : len(hl), 'nodes' : tuple(hl), 'lr': lrate}
+                key = frozenset(dummy_key.items())
+                while key in results_dict:
                     hl = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
-                    key = {'layers' : len(hl), 'nodes' : hl, 'lr': random.choice(lr)}
-                results = []
-                for _ in range(repetitions):
-                    results.append(Cartpole(total_episodes, key['lr'], future_discount, hl)[1])
-                results_dict[key] = sum(results)/len(results)
+                    lrate = random.choice(lr)
+                    dummy_key = {'layers' : len(hl), 'nodes' : tuple(hl), 'lr': lrate}
+                    key = frozenset(dummy_key.items())
+                results1 = []
+                results2 = []
+                for _ in range(int(repetitions)):
+                    result = Cartpole(total_episodes, lrate, future_discount, hl, silent)
+                    results1.append(sum(result[0])/len(result[0]))
+                    results2.append(result[1])
+                print(results1, results2)
+                results_dict[key] = (sum(results1)/len(results1),sum(results2)/len(results2))
             # If exhausted, stop
             if prev_len >= len(results_dict):
                 break
@@ -227,10 +260,11 @@ def main():
     parser.add_argument('-lc', help='Hidden layers critic (AC)', dest = 'layers_critic', required=False)
     parser.add_argument('-tune', help='Tune parameters, where \"tune\" is the amount of dependent parameters to tune. Put 0 for no tuning', dest = 'tune', required = False)
     parser.add_argument('-reps', help='The amount of repetitions to average results over', dest = 'reps', required = False)
+    parser.add_argument('-silent', help='Print score', dest = 'silent', required = False)
     args = parser.parse_args()
     kwargs = dict(total_episodes=args.episodes,learning_rate=args.learning_rate,future_discount=args.discount,estimation_depth=args.estimation,
     gradient_method=args.gradient,hidden_shape=args.hidden,hidden_shape_actor=args.hidden_actor,hidden_shape_critic=args.hidden_critic,
-    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=args.reps)
+    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=args.reps, silent=args.silent)
     
     run_experiments(args.method, **{k: v for k, v in kwargs.items() if v is not None})
 
