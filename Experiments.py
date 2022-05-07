@@ -195,8 +195,8 @@ def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_
                 dummy_key = {'layers_actor' : len(ha), 'layers_critic' : len(hc), 'nodes_actor' : tuple(ha), 'nodes_critic' : tuple(hc), 'lr': lrate}
                 key = frozenset(dummy_key.items())
                 while key in results_dict:#results_dict.has_key(key):
-                    ha = [np.random.randint(1, 8, 1)*16 for _ in range(np.random.randint(1, 5))]
-                    hc = [np.random.randint(1, 8, 1)*16 for _ in range(np.random.randint(1, 5))]
+                    ha = [int(np.random.randint(1, 8, 1))*16 for _ in range(np.random.randint(1, 5))]
+                    hc = [int(np.random.randint(1, 8, 1))*16 for _ in range(np.random.randint(1, 5))]
                     lrate = random.choice(lr)
                     dummy_key = {'layers_actor' : len(ha), 'layers_critic' : len(hc), 'nodes_actor' : tuple(ha), 'nodes_critic' : tuple(hc), 'lr' : lrate}
                     key = frozenset(dummy_key.items())
@@ -213,7 +213,7 @@ def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_
                 dummy_key = {'layers' : len(hl), 'nodes' : tuple(hl), 'lr': lrate}
                 key = frozenset(dummy_key.items())
                 while key in results_dict:
-                    hl = [np.random.randint(1, 8, 1)[0]*16 for _ in range(np.random.randint(1, 5)[0])]
+                    hl = [int(np.random.randint(1, 8, 1))*16 for _ in range(np.random.randint(1, 5))]
                     lrate = random.choice(lr)
                     dummy_key = {'layers' : len(hl), 'nodes' : tuple(hl), 'lr': lrate}
                     key = frozenset(dummy_key.items())
@@ -240,6 +240,9 @@ def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_
             score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)])
         plot_results(total_episodes, score)
 
+def best_settings(method):
+    if method == "AC":
+        pass
 # %%
 #run_experiments("AC")
 def main():
