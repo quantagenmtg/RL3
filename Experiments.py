@@ -157,9 +157,10 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
     
 
 # %%
-def plot_results(total_episodes, score):
+def plot_results(total_episodes, scores):
     #Plot score per episode
-    plt.plot(np.arange(1,total_episodes+1), score)
+    for score in scores:
+        plt.plot(np.arange(1,total_episodes+1), score)
     plt.xlabel("Episode")
     plt.ylabel("Score")
     plt.show()
@@ -254,32 +255,31 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
                 with open('network_params_reinforce.pickle', 'wb') as handle:
                     pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:        
+        scores = []
         settings = dict(get_best(method))
         #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
         if learning_rate is None:
             learning_rate = settings['lr']
-            
-        if method == "AC":
-            if hidden_shape_actor is None:
-                hidden_shape_actor = settings['nodes_actor']
-            if hidden_shape_critic is None:
-                hidden_shape_critic = settings['nodes_critic']
-            if hidden_layers_actor is None and hidden_layers_critic is None:
-                score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent)
-            else:
-                score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
-        if method == "REINFORCE":
-            if hidden_shape is None:
-                hidden_shape = settings['nodes']
-            if hidden_layers is None:
-                score = Cartpole(total_episodes, learning_rate, future_discount, hidden_shape, silent)
-            else:
-                score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)], silent)
-        plot_results(total_episodes, score)
+        for _ in range(repetitions):
+            if method == "AC":
+                if hidden_shape_actor is None:
+                    hidden_shape_actor = settings['nodes_actor']
+                if hidden_shape_critic is None:
+                    hidden_shape_critic = settings['nodes_critic']
+                if hidden_layers_actor is None and hidden_layers_critic is None:
+                    score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent)
+                else:
+                    score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
+            if method == "REINFORCE":
+                if hidden_shape is None:
+                    hidden_shape = settings['nodes']
+                if hidden_layers is None:
+                    score = Cartpole(total_episodes, learning_rate, future_discount, hidden_shape, silent)
+                else:
+                    score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)], silent)
+            scores.append(score[0])
+        plot_results(total_episodes, scores)
 
-def best_settings(method):
-    if method == "AC":
-        pass
 # %%
 #run_experiments("AC")
 def main():
@@ -302,9 +302,14 @@ def main():
     args = parser.parse_args()
     kwargs = dict(total_episodes=args.episodes,learning_rate=args.learning_rate,future_discount=args.discount,estimation_depth=args.estimation,
     gradient_method=args.gradient,hidden_shape=args.hidden,hidden_shape_actor=args.hidden_actor,hidden_shape_critic=args.hidden_critic,
-    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=args.reps, silent=int(args.silent))
+    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=int(args.reps), silent=int(args.silent))
     
-    run_experiments(args.method, **{k: v for k, v in kwargs.items() if v is not None})
+    if args.method != "REINFORCE" and args.method != "AC":
+        print("Please provide a valid method (\"REINFORCE\" or \"AC\")")
+    else:
+        run_experiments(args.method, **{k: v for k, v in kwargs.items() if v is not None})
 
 if __name__ == "__main__":
     main()
+
+# %%
