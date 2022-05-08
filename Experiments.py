@@ -1,8 +1,6 @@
 # %%
 import numpy as np
 import torch
-from torch import FloatTensor,Tensor,LongTensor
-from Policy import REINFORCE, ActorCritic
 import gym
 import random
 import matplotlib.pyplot as plt
@@ -10,10 +8,12 @@ import time
 import argparse
 import pickle
 
+from torch import FloatTensor,Tensor,LongTensor
+from Policy import REINFORCE, ActorCritic
 from os.path import exists
 from pathlib import Path
 from tqdm import tqdm
-
+from operator import itemgetter
 # %% [markdown]
 # # REINFORCE
 # We define a function to run REINFORCE algorithm on.
@@ -169,7 +169,27 @@ def retrieve_dict(key, frozen_dict):
     for key, value in frozen_dict.items():
         print(key)
         exit(0)
-def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = 32, hidden_shape_actor = 16, hidden_shape_critic = 16, hidden_layers = 1, hidden_layers_actor = 1, hidden_layers_critic = 1, tune = 0, repetitions = 5, silent=True):
+        
+def keywithmaxval(d, idx):
+    """ a) create a list of the dict's keys and values; 
+    b) return the key with the max value"""  
+    v = list(d.values())
+    k = list(d.keys())
+    if idx == 0:
+        return k[v.index(max(v,key=itemgetter(idx)))]
+    else:
+        return k[v.index(min(v,key=itemgetter(idx)))]
+        
+def get_best(method):
+    if method == "AC":
+        with open('network_params_ac.pickle', 'rb+') as handle:
+            results_dict = pickle.load(handle)
+    else:
+        with open('network_params_reinforce.pickle', 'rb+') as handle:
+            results_dict = pickle.load(handle)
+    return keywithmaxval(results_dict, 0)
+
+def run_experiments(method, total_episodes = 1000, learning_rate = None, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = None, hidden_shape_actor = None, hidden_shape_critic = None, hidden_layers = None, hidden_layers_actor = None, hidden_layers_critic = None, tune = 0, repetitions = 5, silent=True):
     if int(tune) > 0:
         results_dict = dict()
         lr = [.5, 1e-1, 1e-2, 1e-3]
@@ -234,10 +254,27 @@ def run_experiments(method, total_episodes = 1000, learning_rate = 1e-2, future_
                 with open('network_params_reinforce.pickle', 'wb') as handle:
                     pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:        
+        settings = dict(get_best(method))
+        #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
+        if learning_rate is None:
+            learning_rate = settings['lr']
+            
         if method == "AC":
-            score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)])
+            if hidden_shape_actor is None:
+                hidden_shape_actor = settings['nodes_actor']
+            if hidden_shape_critic is None:
+                hidden_shape_critic = settings['nodes_critic']
+            if hidden_layers_actor is None and hidden_layers_critic is None:
+                score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent)
+            else:
+                score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
         if method == "REINFORCE":
-            score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)])
+            if hidden_shape is None:
+                hidden_shape = settings['nodes']
+            if hidden_layers is None:
+                score = Cartpole(total_episodes, learning_rate, future_discount, hidden_shape, silent)
+            else:
+                score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)], silent)
         plot_results(total_episodes, score)
 
 def best_settings(method):
@@ -265,7 +302,7 @@ def main():
     args = parser.parse_args()
     kwargs = dict(total_episodes=args.episodes,learning_rate=args.learning_rate,future_discount=args.discount,estimation_depth=args.estimation,
     gradient_method=args.gradient,hidden_shape=args.hidden,hidden_shape_actor=args.hidden_actor,hidden_shape_critic=args.hidden_critic,
-    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=args.reps, silent=args.silent)
+    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=args.reps, silent=int(args.silent))
     
     run_experiments(args.method, **{k: v for k, v in kwargs.items() if v is not None})
 
