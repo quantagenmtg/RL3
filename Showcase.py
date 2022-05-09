@@ -11,40 +11,43 @@ def keywithmaxval(d, idx):
     else:
         return k[v.index(min(v,key=itemgetter(idx)))]
 
-with open('network_params_ac.pickle', 'rb+') as handle:
-    results_dict = pickle.load(handle)
+def show_case():
+    with open('network_params_ac.pickle', 'rb+') as handle:
+        results_dict = pickle.load(handle)
 
-with open('network_params_ac_floyd.pickle', 'rb+') as handle:
-    results_dict1 = pickle5.load(handle)
+    with open('network_params_ac_floyd.pickle', 'rb+') as handle:
+        results_dict1 = pickle5.load(handle)
 
-results_dict.update(results_dict1)
-#print(results_dict)
-#print(results_dict.get)
-max_key = max(results_dict, key=results_dict.get)
-max_perf = keywithmaxval(results_dict, 0)
-max_conv = keywithmaxval(results_dict, 1)
-print(max_key, results_dict[max_key])
-print(max_key, results_dict[max_perf])
-print(max_key, results_dict[max_conv])
+    results_dict.update(results_dict1)
+    #print(results_dict)
+    #print(results_dict.get)
+    max_key = max(results_dict, key=results_dict.get)
+    max_perf = keywithmaxval(results_dict, 0)
+    max_conv = keywithmaxval(results_dict, 1)
+    print(max_key, results_dict[max_key])
+    print(max_key, results_dict[max_perf])
+    print(max_key, results_dict[max_conv])
 
-with open('network_params_ac.pickle', 'wb') as handle:
-    pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('network_params_ac.pickle', 'wb') as handle:
+        pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-with open('network_params_reinforce.pickle', 'rb+') as handle:
-    results_dict = pickle.load(handle)
+    with open('network_params_reinforce.pickle', 'rb+') as handle:
+        results_dict = pickle.load(handle)
 
-with open('network_params_reinforce_floyd.pickle', 'rb+') as handle:
-    results_dict1 = pickle5.load(handle)
+    with open('network_params_reinforce_floyd.pickle', 'rb+') as handle:
+        results_dict1 = pickle5.load(handle)
 
-results_dict.update(results_dict1)
-#print(results_dict)
-#print(results_dict.get)
-max_key = max(results_dict, key=results_dict.get)
-max_perf = keywithmaxval(results_dict, 0)
-max_conv = keywithmaxval(results_dict, 1)
-print(max_key, results_dict[max_key])
-print(max_key, results_dict[max_perf])
-print(max_key, results_dict[max_conv])
+    results_dict.update(results_dict1)
+    #print(results_dict)
+    #print(results_dict.get)
+    max_key = max(results_dict, key=results_dict.get)
+    max_perf = keywithmaxval(results_dict, 0)
+    max_conv = keywithmaxval(results_dict, 1)
+    print(max_key, results_dict[max_key])
+    print(max_key, results_dict[max_perf])
+    print(max_key, results_dict[max_conv])
 
-with open('network_params_reinforce.pickle', 'wb') as handle:
-    pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('network_params_reinforce.pickle', 'wb') as handle:
+        pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+nstep = []

@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 import time
 import argparse
 import pickle
-
+import seaborn as sns
+import pandas as pd
 from torch import FloatTensor,Tensor,LongTensor
 from Policy import REINFORCE, ActorCritic
 from os.path import exists
@@ -90,20 +91,6 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
 
 # %%
 def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent = True):
-    """
-    Tries to solve Cartpole-v1 usinf the REINFORCE algorithm. Right now it only applies a Monte-Carlo REINFORCE
-
-    Args:
-        total_episodes: How many times the environment resets
-        learning_rate: For optimizer
-        future_reward_discount_factor: future rewards are dicounted
-        hidden_shape: List of integers. [16,16] would give two hidden layers (linear with PReLU activation) with both 16 nodes in the policy model
-    
-    Returns:
-        scores: Score per episode in a list
-    """
-    
-    
     scores = []
     env = gym.make("CartPole-v1")
     agent = ActorCritic(env.observation_space.shape[0], env.action_space.n, estimation_depth, gradient_method, learning_rate, hidden_shape_actor, hidden_shape_critic)
@@ -157,13 +144,26 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
     
 
 # %%
-def plot_results(total_episodes, scores):
+def plot_results(scores):
     #Plot score per episode
-    for score in scores:
-        plt.plot(np.arange(1,total_episodes+1), score)
-    plt.xlabel("Episode")
-    plt.ylabel("Score")
-    plt.show()
+    sns.lineplot(data=scores,x="Episode",y="Score")
+
+def plot_ablation_results(scores):
+    data_reproc = pd.DataFrame({
+        'Episodes': scores,
+        'nstep' : scores[0],
+        'baseline' : scores[1],
+        'both' : scores[2]
+    })
+    sns.lineplot(x='Episode', y='Score', hue='Gradient Method', data=pd.melt(data_reproc, ['Episodes']))
+
+def plot_compare_results(scores):
+    data_reproc = pd.DataFrame({
+        'Episodes': scores,
+        'AC' : scores[0],
+        'REINFORCE' : scores[1],
+    })
+    sns.lineplot(x='Episode', y='Score', hue='Method', data=pd.melt(data_reproc, ['Episodes']))
 
 # %%
 def retrieve_dict(key, frozen_dict):
@@ -184,13 +184,25 @@ def keywithmaxval(d, idx):
 def get_best(method):
     if method == "AC":
         with open('network_params_ac.pickle', 'rb+') as handle:
-            results_dict = pickle.load(handle)
+            network_dict = pickle.load(handle)
+        with open('params_ac.pickle', 'rb+') as handle:
+            param_dict = pickle.load(handle)
     else:
         with open('network_params_reinforce.pickle', 'rb+') as handle:
-            results_dict = pickle.load(handle)
-    return keywithmaxval(results_dict, 0)
+            network_dict = pickle.load(handle)
+        with open('params_reinforce.pickle', 'rb+') as handle:
+            param_dict = pickle.load(handle)
+    return keywithmaxval(network_dict, 0), keywithmaxval(param_dict, 0)
 
-def run_experiments(method, total_episodes = 1000, learning_rate = None, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = None, hidden_shape_actor = None, hidden_shape_critic = None, hidden_layers = None, hidden_layers_actor = None, hidden_layers_critic = None, tune = 0, repetitions = 5, silent=True):
+def run_experiments(method, total_episodes = 1000, learning_rate = None, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = None, hidden_shape_actor = None, hidden_shape_critic = None, hidden_layers = None, hidden_layers_actor = None, hidden_layers_critic = None, tune = 0, repetitions = 5, silent=True, ablation=False, compare=False):
+    if silent is not None:
+        silent = int(silent)
+    if repetitions is not None:
+        repetitions = int(repetitions)
+    if ablation is not None:
+        ablation = int(ablation)
+    if compare is not None:
+        compare = int(compare)
     if int(tune) > 0:
         results_dict = dict()
         lr = [.5, 1e-1, 1e-2, 1e-3]
@@ -254,31 +266,137 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
             if method == "REINFORCE":
                 with open('network_params_reinforce.pickle', 'wb') as handle:
                     pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    else:        
+
+            network_settings, _ = get_best(method)
+            network_settings = dict(network_settings)
+            results_dict = dict()
+            if method == "AC": 
+                gms = ['nstep', 'baseline', 'both']
+                depths = [1, 50, 100, 500]
+                for gm in tqdm(gms):
+                    for depth in tqdm(depths, leave=False):
+                        dummy_key = {'gms' : gm, 'depth' : depth}
+                        key = frozenset(dummy_key.items())
+                        results1 = []
+                        results2 = []
+                        for _ in range(int(repetitions)):
+                            result = AC(total_episodes, depth, network_settings['lr'], gm, network_settings['nodes_actor'], network_settings['nodes_critic'], silent)
+                            results1.append(sum(result[0])/len(result[0]))
+                            results2.append(result[1])
+                        results_dict[key] = (sum(results1)/len(results1),sum(results2)/len(results2))
+            if method == "REINFORCE": 
+                discounts = [.95, .99, .995, ]
+                for d in tqdm(discounts):
+                    dummy_key = {'discount': d}
+                    key = frozenset(dummy_key.items())
+                    results1 = []
+                    results2 = []
+                    for _ in range(int(repetitions)):
+                        result = Cartpole(total_episodes, network_settings['lr'], d, network_settings['nodes'], silent)
+                        results1.append(sum(result[0])/len(result[0]))
+                        results2.append(result[1])
+                    results_dict[key] = (sum(results1)/len(results1),sum(results2)/len(results2))
+            if method == "AC":
+                with open('params_ac.pickle', 'wb') as handle:
+                    pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            if method == "REINFORCE":
+                with open('params_reinforce.pickle', 'wb') as handle:
+                    pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    elif ablation:
+        ablation_score = []
         scores = []
-        settings = dict(get_best(method))
+        network_settings, param_settings = get_best(method)
+        network_settings = dict(network_settings)
+        param_settings = dict(param_settings)
         #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
         if learning_rate is None:
-            learning_rate = settings['lr']
+            learning_rate = network_settings['lr']
+        for gm in ['nstep', 'baseline', 'both']:
+            gradient_method =gm
+            for _ in range(repetitions):
+                if method == "AC":
+                    if estimation_depth is None:
+                        estimation_depth = param_settings['depth']
+                    if hidden_shape_actor is None:
+                        hidden_shape_actor = network_settings['nodes_actor']
+                    if hidden_shape_critic is None:
+                        hidden_shape_critic = network_settings['nodes_critic']
+                    if hidden_layers_actor is None and hidden_layers_critic is None:
+                        score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent)
+                    else:
+                        score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
+                scores.append(score)
+            ablation_score.append(scores)
+        plot_ablation_results(ablation_score)
+    elif compare:
+        scores = []
+        method_scores = []
+        network_settings, param_settings = get_best(method)
+        network_settings = dict(network_settings)
+        param_settings = dict(param_settings)
+        #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
+        if learning_rate is None:
+            learning_rate = network_settings['lr']
+        for method in ['AC', 'REINFORCE']:
+            for _ in range(repetitions):
+                if method == "AC":
+                    if gradient_method is None:
+                        gradient_method = param_settings['gms']
+                    if estimation_depth is None:
+                        estimation_depth = param_settings['depth']
+                    if hidden_shape_actor is None:
+                        hidden_shape_actor = network_settings['nodes_actor']
+                    if hidden_shape_critic is None:
+                        hidden_shape_critic = network_settings['nodes_critic']
+                    if hidden_layers_actor is None and hidden_layers_critic is None:
+                        score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent)
+                    else:
+                        score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
+                if method == "REINFORCE":
+                    if future_discount is None:
+                        future_discount = param_settings['discount']
+                    if hidden_shape is None:
+                        hidden_shape = network_settings['nodes']
+                    if hidden_layers is None:
+                        score = Cartpole(total_episodes, learning_rate, future_discount, hidden_shape, silent)
+                    else:
+                        score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)], silent)
+                scores.append(score[0])
+            method_scores.append(scores)
+        plot_compare_results(method_scores)
+    else:        
+        scores = []
+        network_settings, param_settings = get_best(method)
+        network_settings = dict(network_settings)
+        param_settings = dict(param_settings)
+        #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
+        if learning_rate is None:
+            learning_rate = network_settings['lr']
         for _ in range(repetitions):
             if method == "AC":
+                if gradient_method is None:
+                    gradient_method = param_settings['gms']
+                if estimation_depth is None:
+                    estimation_depth = param_settings['depth']
                 if hidden_shape_actor is None:
-                    hidden_shape_actor = settings['nodes_actor']
+                    hidden_shape_actor = network_settings['nodes_actor']
                 if hidden_shape_critic is None:
-                    hidden_shape_critic = settings['nodes_critic']
+                    hidden_shape_critic = network_settings['nodes_critic']
                 if hidden_layers_actor is None and hidden_layers_critic is None:
                     score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent)
                 else:
                     score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
             if method == "REINFORCE":
+                if future_discount is None:
+                    future_discount = param_settings['discount']
                 if hidden_shape is None:
-                    hidden_shape = settings['nodes']
+                    hidden_shape = network_settings['nodes']
                 if hidden_layers is None:
                     score = Cartpole(total_episodes, learning_rate, future_discount, hidden_shape, silent)
                 else:
                     score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)], silent)
             scores.append(score[0])
-        plot_results(total_episodes, scores)
+        plot_results(scores)
 
 # %%
 #run_experiments("AC")
@@ -289,7 +407,7 @@ def main():
     parser.add_argument('-lr', help='Learning rate', dest = 'learning_rate', required=False)
     parser.add_argument('-d', help='Future reward discount factor (REINFORCE)', dest = 'discount', required=False)
     parser.add_argument('-est', help='Estimation depth (AC)', dest = 'estimation', required=False)
-    parser.add_argument('-grad', help='Gradient method (AC)', dest = 'gradient', required=False)
+    parser.add_argument('-grad', help='Gradient method (AC): \"nstep\", \"baseline\", or \"both\"', dest = 'gradient', required=False)
     parser.add_argument('-hs', help='Hidden shape (REINFORCE)', dest = 'hidden', required=False)
     parser.add_argument('-ha', help='Hidden shape actor (AC)', dest = 'hidden_actor', required=False)
     parser.add_argument('-hc', help='Hidden shape critic (AC))', dest = 'hidden_critic', required=False)
@@ -299,10 +417,13 @@ def main():
     parser.add_argument('-tune', help='Tune parameters, where \"tune\" is the amount of dependent parameters to tune. Put 0 for no tuning', dest = 'tune', required = False)
     parser.add_argument('-reps', help='The amount of repetitions to average results over', dest = 'reps', required = False)
     parser.add_argument('-silent', help='Print score', dest = 'silent', required = False)
+    parser.add_argument('-ablation', help='Plot ablation experiments', dest = 'ablation', required = False)
+    parser.add_argument('-compare', help='Plot comparisons', dest = 'compare', required = False)
     args = parser.parse_args()
     kwargs = dict(total_episodes=args.episodes,learning_rate=args.learning_rate,future_discount=args.discount,estimation_depth=args.estimation,
     gradient_method=args.gradient,hidden_shape=args.hidden,hidden_shape_actor=args.hidden_actor,hidden_shape_critic=args.hidden_critic,
-    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=int(args.reps), silent=int(args.silent))
+    hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=args.reps, silent=args.silent,
+    ablation=args.ablation,compare=args.compare)
     
     if args.method != "REINFORCE" and args.method != "AC":
         print("Please provide a valid method (\"REINFORCE\" or \"AC\")")
