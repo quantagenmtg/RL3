@@ -17,11 +17,9 @@ from tqdm import tqdm
 from operator import itemgetter
 import scipy.stats as st
 
-# %% [markdown]
 # # REINFORCE
 # We define a function to run REINFORCE algorithm on.
 
-# %%
 def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidden_shape, silent=True):
     """
     Tries to solve Cartpole-v1 usinf the REINFORCE algorithm. Right now it only applies a Monte-Carlo REINFORCE
@@ -34,6 +32,8 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
     
     Returns:
         scores: Score per episode in a list
+        learned_at: if model converged the episode it converged
+        loss: Loss per episode in a list
     """
     
     
@@ -90,12 +90,24 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
     return scores, learned_at, loss
 
     
-
-# %% [markdown]
 # # Actor-Critic
 
 # %%
 def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent = True):
+    """
+    Tries to solve Cartpole-v1 usinf the Actor Critic algorithm.
+
+    Args:
+        total_episodes: How many times the environment resets
+        learning_rate: For optimizer
+        hidden_shape: List of integers. [16,16] would give two hidden layers (linear with PReLU activation) with both 16 nodes in the policy model
+        estimation_depth: depth that critic estimates the environment
+        gradient_method: Determines whether to use bootstrapping, baseline subtraction, or both
+    Returns:
+        scores: Score per episode in a list
+        learned_at: if model converged the episode it converged
+        loss: Loss per episode in a list
+    """
     scores = []
     loss = []
     env = gym.make("CartPole-v1")
@@ -151,19 +163,19 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
 
     
 
-# %%
+# Plots results of default experients
 def plot_results(scores, total_episodes, method, plot_grads = False):
     fixed_scores = []
+    # Cleaning up lists
     for score in scores:
         lst = [sum(score)/len(score) if np.isnan(x) else x for x in score]
         for _ in range(total_episodes-len(lst)):
             lst.append(score[-1])
         fixed_scores.append(lst)
-    
+    # For error bars around plots
     error = st.t.interval(alpha=0.95, df=len(fixed_scores)-1, loc=np.mean(fixed_scores, axis=0), scale=st.sem(fixed_scores)) 
     plt.plot(np.arange(1,total_episodes+1), np.mean(fixed_scores, axis=0), 'b-')
     plt.fill_between(np.arange(1,total_episodes+1), error[0], error[1], color='b', alpha=0.2)
-    #plt.fill_between(np.arange(1,total_episodes+1), np.mean(scores, axis=0) - np.std(np.mean(scores, axis=0)), np.mean(scores, axis=0) + np.std(np.mean(scores, axis=0)), color='b', alpha=0.2)
     plt.xlabel("Episode")
     if plot_grads:
         plt.ylabel("Loss")
@@ -172,6 +184,7 @@ def plot_results(scores, total_episodes, method, plot_grads = False):
     plt.title(method)
     plt.show()
 
+# Plots ablation results
 def plot_ablation_results(total_episodes, scores, plot_grads = False):
     fixed_scores1 = []
     for score in scores[0]:
@@ -196,13 +209,10 @@ def plot_ablation_results(total_episodes, scores, plot_grads = False):
     error3 = st.t.interval(alpha=0.95, df=len(fixed_scores3)-1, loc=np.mean(fixed_scores3, axis=0), scale=st.sem(fixed_scores3)) 
     plt.plot(np.arange(1,total_episodes+1), np.mean(fixed_scores1, axis=0), 'b-', label='nsteps')
     plt.fill_between(np.arange(1,total_episodes+1), error1[0], error1[1], color='b', alpha=0.2)
-    #plt.fill_between(np.arange(1,total_episodes+1), np.mean(scores[0], axis=0) - np.std(np.mean(scores[0], axis=0)), np.mean(scores[0], axis=0) + np.std(np.mean(scores[0], axis=0)), color='b', alpha=0.2)
     plt.plot(np.arange(1,total_episodes+1), np.mean(fixed_scores2, axis=0), 'r-', label='baseline')
     plt.fill_between(np.arange(1,total_episodes+1), error2[0], error2[1], color='r', alpha=0.2)
-    #plt.fill_between(np.arange(1,total_episodes+1), np.mean(scores[1], axis=0) - np.std(np.mean(scores[1], axis=0)), np.mean(scores[1], axis=0) + np.std(np.mean(scores[1], axis=0)), color='r', alpha=0.2)
     plt.plot(np.arange(1,total_episodes+1), np.mean(fixed_scores3, axis=0), 'g-', label='both')
     plt.fill_between(np.arange(1,total_episodes+1), error3[0], error3[1], color='g', alpha=0.2)
-    #plt.fill_between(np.arange(1,total_episodes+1), np.mean(scores[2], axis=0) - np.std(np.mean(scores[2], axis=0)), np.mean(scores[2], axis=0) + np.std(np.mean(scores[2], axis=0)), color='g', alpha=0.2)
     plt.xlabel("Episode")
     if plot_grads:
         plt.ylabel("Loss")
@@ -211,6 +221,7 @@ def plot_ablation_results(total_episodes, scores, plot_grads = False):
     plt.legend(loc="upper left")
     plt.show()
 
+# Plots policy comparison
 def plot_compare_results(total_episodes, scores):
     error1 = st.t.interval(alpha=0.95, df=len(scores[0])-1, loc=np.mean(scores[0], axis=0), scale=st.sem(scores[0])) 
     error2 = st.t.interval(alpha=0.95, df=len(scores[1])-1, loc=np.mean(scores[1], axis=0), scale=st.sem(scores[1])) 
@@ -223,11 +234,6 @@ def plot_compare_results(total_episodes, scores):
     plt.legend(loc="upper left")
     plt.show()
 
-# %%
-def retrieve_dict(key, frozen_dict):
-    for key, value in frozen_dict.items():
-        print(key)
-        
 def keywithmaxval(d, idx):
     """ a) create a list of the dict's keys and values; 
     b) return the key with the max value"""  
@@ -237,7 +243,8 @@ def keywithmaxval(d, idx):
         return k[v.index(max(v,key=itemgetter(idx)))]
     else:
         return k[v.index(min(v,key=itemgetter(idx)))]
-        
+
+# Gets best parameter settings from tuning dict   
 def get_best(method):
     if method == "AC":
         with open('network_params_ac.pickle', 'rb+') as handle:
@@ -251,7 +258,28 @@ def get_best(method):
             param_dict = pickle.load(handle)
     return keywithmaxval(network_dict, 0), keywithmaxval(param_dict, 0)
 
+
 def run_experiments(method, total_episodes = 1000, learning_rate = None, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = None, hidden_shape_actor = None, hidden_shape_critic = None, hidden_layers = None, hidden_layers_actor = None, hidden_layers_critic = None, tune = 0, repetitions = 5, silent=True, ablation=False, compare=False, plot_grads=False):
+    '''
+        DISCLAIMER: It would be neater to divide this method into multiple ones but it works really well and otherwise we need to pass the 1000 function arguments to the other methods
+        
+        Executes experiments according to arguments and plots results (either loss or score)
+
+        Args:
+            method: Which policy to test ("AC" or "REINFORCE)
+            total_episodes: How many times the environment resets
+            learning_rate: For optimizer
+            future_reward_discount_factor: future rewards are dicounted
+            estimation_depth: depth that critic estimates the environment
+            gradient_method: Determines whether to use bootstrapping, baseline subtraction, or both
+            shapes and nodes: network settings
+            tune: integer, if > 0, it will tune the model for that number of settings. it also does not plot results
+            repetitions: integer, number of times to test the model
+            silent: boolean, if False it prints score per episode
+            ablation: boolean, if True it performs the ablation experiments
+            compare: boolean, if True it compares REINFORCE performance with AC
+            plot_grads: Plot Loss as metric instead of Score per episode
+    '''
     if silent is not None:
         silent = int(silent)
     if repetitions is not None:
@@ -368,7 +396,6 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
         network_settings, param_settings = get_best(method)
         network_settings = dict(network_settings)
         param_settings = dict(param_settings)
-        #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
         if learning_rate is None:
             learning_rate = network_settings['lr']
         for gm in ['nstep', 'baseline', 'both']:
@@ -398,9 +425,6 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
     elif compare:
         scores = []
         method_scores = []
-        
-        #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
-        
         for m in ['AC', 'REINFORCE']:
             network_settings, param_settings = get_best(m)
             network_settings = dict(network_settings)
@@ -441,7 +465,6 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
         network_settings, param_settings = get_best(method)
         network_settings = dict(network_settings)
         param_settings = dict(param_settings)
-        #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
         if learning_rate is None:
             learning_rate = network_settings['lr']
         for _ in range(repetitions):
@@ -474,8 +497,6 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
         else:
             plot_results(scores, total_episodes, method)
 
-# %%
-#run_experiments("AC")
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--method', help='Method', dest = 'method', required = True)
@@ -510,4 +531,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# %%
