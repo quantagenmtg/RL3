@@ -130,6 +130,7 @@ class REINFORCE():
         self.optim.zero_grad()
         loss.backward()
         self.optim.step()
+        return loss.detach().numpy()
 
 
 class ActorCritic():
@@ -180,3 +181,4 @@ class ActorCritic():
         # backpropagation of loss to actor NN   
         loss_actor.backward()
         self.optim_actor.step()
+        return loss_actor.detach().numpy()

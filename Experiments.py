@@ -15,6 +15,8 @@ from os.path import exists
 from pathlib import Path
 from tqdm import tqdm
 from operator import itemgetter
+import scipy.stats as st
+
 # %% [markdown]
 # # REINFORCE
 # We define a function to run REINFORCE algorithm on.
@@ -36,6 +38,7 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
     
     
     scores = []
+    loss = []
     env = gym.make("CartPole-v1")
     agent = REINFORCE(env.observation_space.shape[0], env.action_space.n, learning_rate, future_reward_discount_factor, hidden_shape)
     learned_at = total_episodes
@@ -65,7 +68,7 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
         
         rewards = torch.tensor(rewards)
         log_probs = torch.cat(log_probs)
-        agent.update(rewards,log_probs)
+        loss.append(agent.update(rewards,log_probs))
 
         scores.append(t+1)
 
@@ -82,7 +85,9 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
     if np.mean(scores[-100:]) < 475: 
         if not silent:
             print("Not Solved...")
-    return scores, learned_at
+    for _ in range(total_episodes-len(scores)):
+        scores.append(scores[-1])
+    return scores, learned_at, loss
 
     
 
@@ -92,6 +97,7 @@ def Cartpole(total_episodes, learning_rate, future_reward_discount_factor, hidde
 # %%
 def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent = True):
     scores = []
+    loss = []
     env = gym.make("CartPole-v1")
     agent = ActorCritic(env.observation_space.shape[0], env.action_space.n, estimation_depth, gradient_method, learning_rate, hidden_shape_actor, hidden_shape_critic)
     learned_at = total_episodes
@@ -124,7 +130,7 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
         states = torch.Tensor(np.array(states))
         rewards = np.array(rewards)
         log_probs = torch.cat(log_probs)
-        agent.update(rewards,log_probs, states)
+        loss.append(agent.update(rewards,log_probs, states))
 
         scores.append(t+1)
         #Cartpole v1 is considered solved when
@@ -139,37 +145,88 @@ def AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_
     if np.mean(scores[-100:]) < 475:
         if not silent: 
             print("Not Solved...")
-    return scores, learned_at
+    for _ in range(total_episodes-len(scores)):
+        scores.append(scores[-1])
+    return scores, learned_at, loss
 
     
 
 # %%
-def plot_results(scores):
-    #Plot score per episode
-    sns.lineplot(data=scores,x="Episode",y="Score")
+def plot_results(scores, total_episodes, method, plot_grads = False):
+    fixed_scores = []
+    for score in scores:
+        lst = [sum(score)/len(score) if np.isnan(x) else x for x in score]
+        for _ in range(total_episodes-len(lst)):
+            lst.append(score[-1])
+        fixed_scores.append(lst)
+    
+    error = st.t.interval(alpha=0.95, df=len(fixed_scores)-1, loc=np.mean(fixed_scores, axis=0), scale=st.sem(fixed_scores)) 
+    plt.plot(np.arange(1,total_episodes+1), np.mean(fixed_scores, axis=0), 'b-')
+    plt.fill_between(np.arange(1,total_episodes+1), error[0], error[1], color='b', alpha=0.2)
+    #plt.fill_between(np.arange(1,total_episodes+1), np.mean(scores, axis=0) - np.std(np.mean(scores, axis=0)), np.mean(scores, axis=0) + np.std(np.mean(scores, axis=0)), color='b', alpha=0.2)
+    plt.xlabel("Episode")
+    if plot_grads:
+        plt.ylabel("Loss")
+    else:
+        plt.ylabel("score")
+    plt.title(method)
+    plt.show()
 
-def plot_ablation_results(scores):
-    data_reproc = pd.DataFrame({
-        'Episodes': scores,
-        'nstep' : scores[0],
-        'baseline' : scores[1],
-        'both' : scores[2]
-    })
-    sns.lineplot(x='Episode', y='Score', hue='Gradient Method', data=pd.melt(data_reproc, ['Episodes']))
+def plot_ablation_results(total_episodes, scores, plot_grads = False):
+    fixed_scores1 = []
+    for score in scores[0]:
+        lst = [sum(score)/len(score) if np.isnan(x) else x for x in score]
+        for _ in range(total_episodes-len(lst)):
+            lst.append(score[-1])
+        fixed_scores1.append(lst)
+    fixed_scores2 = []
+    for score in scores[1]:
+        lst = [sum(score)/len(score) if np.isnan(x) else x for x in score]
+        for _ in range(total_episodes-len(lst)):
+            lst.append(score[-1])
+        fixed_scores2.append(lst)
+    fixed_scores3 = []
+    for score in scores[2]:
+        lst = [sum(score)/len(score) if np.isnan(x) else x for x in score]
+        for _ in range(total_episodes-len(lst)):
+            lst.append(score[-1])
+        fixed_scores3.append(lst)
+    error1 = st.t.interval(alpha=0.95, df=len(fixed_scores1)-1, loc=np.mean(fixed_scores1, axis=0), scale=st.sem(fixed_scores1)) 
+    error2 = st.t.interval(alpha=0.95, df=len(fixed_scores2)-1, loc=np.mean(fixed_scores2, axis=0), scale=st.sem(fixed_scores2)) 
+    error3 = st.t.interval(alpha=0.95, df=len(fixed_scores3)-1, loc=np.mean(fixed_scores3, axis=0), scale=st.sem(fixed_scores3)) 
+    plt.plot(np.arange(1,total_episodes+1), np.mean(fixed_scores1, axis=0), 'b-', label='nsteps')
+    plt.fill_between(np.arange(1,total_episodes+1), error1[0], error1[1], color='b', alpha=0.2)
+    #plt.fill_between(np.arange(1,total_episodes+1), np.mean(scores[0], axis=0) - np.std(np.mean(scores[0], axis=0)), np.mean(scores[0], axis=0) + np.std(np.mean(scores[0], axis=0)), color='b', alpha=0.2)
+    plt.plot(np.arange(1,total_episodes+1), np.mean(fixed_scores2, axis=0), 'r-', label='baseline')
+    plt.fill_between(np.arange(1,total_episodes+1), error2[0], error2[1], color='r', alpha=0.2)
+    #plt.fill_between(np.arange(1,total_episodes+1), np.mean(scores[1], axis=0) - np.std(np.mean(scores[1], axis=0)), np.mean(scores[1], axis=0) + np.std(np.mean(scores[1], axis=0)), color='r', alpha=0.2)
+    plt.plot(np.arange(1,total_episodes+1), np.mean(fixed_scores3, axis=0), 'g-', label='both')
+    plt.fill_between(np.arange(1,total_episodes+1), error3[0], error3[1], color='g', alpha=0.2)
+    #plt.fill_between(np.arange(1,total_episodes+1), np.mean(scores[2], axis=0) - np.std(np.mean(scores[2], axis=0)), np.mean(scores[2], axis=0) + np.std(np.mean(scores[2], axis=0)), color='g', alpha=0.2)
+    plt.xlabel("Episode")
+    if plot_grads:
+        plt.ylabel("Loss")
+    else:
+        plt.ylabel("score")
+    plt.legend(loc="upper left")
+    plt.show()
 
-def plot_compare_results(scores):
-    data_reproc = pd.DataFrame({
-        'Episodes': scores,
-        'AC' : scores[0],
-        'REINFORCE' : scores[1],
-    })
-    sns.lineplot(x='Episode', y='Score', hue='Method', data=pd.melt(data_reproc, ['Episodes']))
+def plot_compare_results(total_episodes, scores):
+    error1 = st.t.interval(alpha=0.95, df=len(scores[0])-1, loc=np.mean(scores[0], axis=0), scale=st.sem(scores[0])) 
+    error2 = st.t.interval(alpha=0.95, df=len(scores[1])-1, loc=np.mean(scores[1], axis=0), scale=st.sem(scores[1])) 
+    plt.plot(np.arange(1,total_episodes+1), np.mean(np.asarray(scores[0]), axis=0), 'b-', label='AC')
+    plt.fill_between(np.arange(1,total_episodes+1), error1[0], error1[1], color='b', alpha=0.2)
+    plt.plot(np.arange(1,total_episodes+1), np.mean(np.asarray(scores[1]), axis=0), 'r-', label='REINFORCE')
+    plt.fill_between(np.arange(1,total_episodes+1), error2[0], error2[1], color='r', alpha=0.2)
+    plt.xlabel("Episode")
+    plt.ylabel("Score")
+    plt.legend(loc="upper left")
+    plt.show()
 
 # %%
 def retrieve_dict(key, frozen_dict):
     for key, value in frozen_dict.items():
         print(key)
-        exit(0)
         
 def keywithmaxval(d, idx):
     """ a) create a list of the dict's keys and values; 
@@ -194,7 +251,7 @@ def get_best(method):
             param_dict = pickle.load(handle)
     return keywithmaxval(network_dict, 0), keywithmaxval(param_dict, 0)
 
-def run_experiments(method, total_episodes = 1000, learning_rate = None, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = None, hidden_shape_actor = None, hidden_shape_critic = None, hidden_layers = None, hidden_layers_actor = None, hidden_layers_critic = None, tune = 0, repetitions = 5, silent=True, ablation=False, compare=False):
+def run_experiments(method, total_episodes = 1000, learning_rate = None, future_discount = 1, estimation_depth = 500, gradient_method = 'both', hidden_shape = None, hidden_shape_actor = None, hidden_shape_critic = None, hidden_layers = None, hidden_layers_actor = None, hidden_layers_critic = None, tune = 0, repetitions = 5, silent=True, ablation=False, compare=False, plot_grads=False):
     if silent is not None:
         silent = int(silent)
     if repetitions is not None:
@@ -203,6 +260,7 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
         ablation = int(ablation)
     if compare is not None:
         compare = int(compare)
+    total_episodes = int(total_episodes)
     if int(tune) > 0:
         results_dict = dict()
         lr = [.5, 1e-1, 1e-2, 1e-3]
@@ -304,7 +362,9 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
                     pickle.dump(results_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
     elif ablation:
         ablation_score = []
+        ablation_loss = []
         scores = []
+        losses = []
         network_settings, param_settings = get_best(method)
         network_settings = dict(network_settings)
         param_settings = dict(param_settings)
@@ -322,24 +382,33 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
                     if hidden_shape_critic is None:
                         hidden_shape_critic = network_settings['nodes_critic']
                     if hidden_layers_actor is None and hidden_layers_critic is None:
-                        score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent)
+                        score = AC(total_episodes, estimation_depth, learning_rate, gm, hidden_shape_actor, hidden_shape_critic, silent)
                     else:
-                        score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
-                scores.append(score)
+                        score = AC(total_episodes, estimation_depth, learning_rate, gm, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
+                scores.append(score[0])
+                losses.append(score[2])
             ablation_score.append(scores)
-        plot_ablation_results(ablation_score)
+            ablation_loss.append(losses)
+            losses = []
+            scores = []
+        if plot_grads:
+            plot_ablation_results(total_episodes, ablation_loss, plot_grads)
+        else:
+            plot_ablation_results(total_episodes, ablation_score)
     elif compare:
         scores = []
         method_scores = []
-        network_settings, param_settings = get_best(method)
-        network_settings = dict(network_settings)
-        param_settings = dict(param_settings)
+        
         #settings = {tuple(map(tuple, k)): v for k, v in frozen_settings.items()}
-        if learning_rate is None:
-            learning_rate = network_settings['lr']
-        for method in ['AC', 'REINFORCE']:
+        
+        for m in ['AC', 'REINFORCE']:
+            network_settings, param_settings = get_best(m)
+            network_settings = dict(network_settings)
+            param_settings = dict(param_settings)
+            if learning_rate is None:
+                learning_rate = network_settings['lr']
             for _ in range(repetitions):
-                if method == "AC":
+                if m == "AC":
                     if gradient_method is None:
                         gradient_method = param_settings['gms']
                     if estimation_depth is None:
@@ -352,7 +421,7 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
                         score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, hidden_shape_actor, hidden_shape_critic, silent)
                     else:
                         score = AC(total_episodes, estimation_depth, learning_rate, gradient_method, [hidden_shape_actor for _ in range(hidden_layers_actor)], [hidden_shape_critic for _ in range(hidden_layers_critic)], silent)
-                if method == "REINFORCE":
+                if m == "REINFORCE":
                     if future_discount is None:
                         future_discount = param_settings['discount']
                     if hidden_shape is None:
@@ -363,9 +432,12 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
                         score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)], silent)
                 scores.append(score[0])
             method_scores.append(scores)
-        plot_compare_results(method_scores)
+            scores = []
+            
+        plot_compare_results(total_episodes, method_scores)
     else:        
         scores = []
+        losses = []
         network_settings, param_settings = get_best(method)
         network_settings = dict(network_settings)
         param_settings = dict(param_settings)
@@ -396,7 +468,11 @@ def run_experiments(method, total_episodes = 1000, learning_rate = None, future_
                 else:
                     score = Cartpole(total_episodes, learning_rate, future_discount, [hidden_shape for _ in range(hidden_layers)], silent)
             scores.append(score[0])
-        plot_results(scores)
+            losses.append(score[2])
+        if plot_grads:
+            plot_results(losses, total_episodes, method, plot_grads)
+        else:
+            plot_results(scores, total_episodes, method)
 
 # %%
 #run_experiments("AC")
@@ -419,11 +495,12 @@ def main():
     parser.add_argument('-silent', help='Print score', dest = 'silent', required = False)
     parser.add_argument('-ablation', help='Plot ablation experiments', dest = 'ablation', required = False)
     parser.add_argument('-compare', help='Plot comparisons', dest = 'compare', required = False)
+    parser.add_argument('-variance', help='Plot loss instead of score', dest = 'plot_grads', required = False)
     args = parser.parse_args()
     kwargs = dict(total_episodes=args.episodes,learning_rate=args.learning_rate,future_discount=args.discount,estimation_depth=args.estimation,
     gradient_method=args.gradient,hidden_shape=args.hidden,hidden_shape_actor=args.hidden_actor,hidden_shape_critic=args.hidden_critic,
     hidden_layers=args.layers,hidden_layers_actor=args.layers_actor,hidden_layers_critic=args.layers_critic,tune=args.tune,repetitions=args.reps, silent=args.silent,
-    ablation=args.ablation,compare=args.compare)
+    ablation=args.ablation,compare=args.compare,plot_grads=args.plot_grads)
     
     if args.method != "REINFORCE" and args.method != "AC":
         print("Please provide a valid method (\"REINFORCE\" or \"AC\")")
